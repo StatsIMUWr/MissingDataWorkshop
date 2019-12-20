@@ -1,0 +1,1345 @@
+---
+title: "Handling missing values"
+author: "__Julie Josse__ with the help of her students  Wei Jiang, Aude Sportisse, Geneviève Robin"
+output:
+  html_document:
+    css: hideOutput.css
+    includes:
+      in_header: hideOutput.script
+    toc: yes
+    toc_depth: 4
+    toc_float: yes
+  pdf_document:
+    toc: yes
+    toc_depth: '4'
+---
+
+```{r Knitr_Global_Options, include=FALSE}
+library(knitr)
+opts_chunk$set(warning = FALSE, message = FALSE, cache = TRUE, autodep = TRUE, tidy = FALSE, eval = FALSE)
+library(rgl)
+```
+
+# 1) Introduction
+
+The problem of missing values exists since the earliest attempts to exploit data as a source
+of knowledge, as it lies intrinsically in the process of obtaining, recording, and preparing the
+data itself. Clearly,  “The best thing to do with missing values is
+not to have any”, but in the contemporary world, considering the ever growing amount of accessible data - and demand for it - in statistical
+justification, this is almost never the case. Main
+references on missing values include Schafer (1997), Little and Rubin (1987, 2002), van Buuren
+(2018)[https://stefvanbuuren.name/fimd/], Carpenter and Kenward (2013) and (Gelman and Hill, 2007)[chp. 25].
+
+Missing values occur for plenty of reasons: machines that fail, individuals who forget or do not want to answer some questions of a questionnaire, damaged plants, etc. They are problematic since most statistical methods cannot be applied on a incomplete dataset. In this chapter we review the different types of missing data and statistical methods which allow their incorporation.
+
+## 1.1) Definition
+
+### 1.1.1) MCAR, MAR, MNAR
+
+It is important to analyse both the pattern and the mechanism of missing values. Indeed, the methods and the properties of the methods to deal with missing values depend on both. For example, intuitively, we can say that if we have missing data on almost all observations of a single variable, we will rather delete the variable and not delete all observations that have missing data.  
+
+There are several types of missing data, and explaining the reasons why part of the data is missing is crucial in order to perform inference or any statistical analysis. The typology of missing data has given rise to many controversies but we can first talk about the most well-known mechanisms, namely MCAR, MAR and MNAR, introduced historically by Rubin in 1976. 
+
+Dealing with missing data boils down to considering that the observed data $X_{\text{OBS}}$ is only a subset of a complete data model $X = (X_{\text{OBS}},X_{\text{MIS}})$ which is not fully observable (i.e. $X_{\text{MIS}}$ are the missing data). Assume $X = (X_1,\ldots,X_p)$; the missing values $X_{\text{MIS}}$ are characterized by a set of indices $I_{\text{MIS}}\subset \{1,\ldots,p\}$ such that $X_{\text{MIS}} = \{X_i; i\in I_{\text{MIS}}\}$. We define the indicator of missingness $M \in \{0,1\}^n$ such that $M_i = 1$ if $i\in I_{\text{MIS}}$ and $M_i = 0$ otherwise; $M$ defines the *pattern* of missingness. Both $X$ and $M$ are modeled as random variables with probability distributions $\mathbb{P}_X$ and $\mathbb{P}_M$ respectively. Assume that the distribution of $M$ is parametrized by a parameter $\phi$ - for example the probability $p$ of a Bernoulli distribution. 
+
+The different types of missing data refer to different dependence relationships between $X_{\text{OBS}},X_{\text{MIS}}$ and $M$.
+
+The observations are said to be **Missing Completely At Random (MCAR)** if the probability that an observation is missing is independent of the variables and observations in the dataset: the probability that an observation is missing does not depend on $(X_{\text{OBS}},X_{\text{MIS}})$. Formally,
+
+$$\mathbb{P}_M(M|X_{\text{OBS}},X_{\text{MIS}},\phi) =  \mathbb{P}_M(M), \forall \phi$$
+  
+  The observations are said to be **missing at random (MAR)** if the probability that an observation is missing only depends on the observed data $X_{\text{OBS}}$. Formally,
+
+$$\mathbb{P}_M(M|X_{\text{OBS}},X_{\text{MIS}},\phi) =  \mathbb{P}_M(M|X_{\text{OBS}},\phi), \forall \phi, X_{\text{MIS}}$$
+  
+The observations are said to be **Missing Not At Random (MNAR)** in all other cases.
+
+#### 1.1.1) a) Toy example
+
+Let us give a concrete example to illustrate these definitions. 
+
+| Age ($A$) | Income ($I$) | $M_{\textrm{Age}}$ |$M_{\textrm{Inc}}$ |  
+|:------:|:------:|:------:|:------:| 
+| 22 | 1300 | 1 | 1 |
+| 18 | NA | 1 | 0 | 
+| 29 | 4000 | 1 | 1 |
+| 58 | NA | 1 | 0 |
+
+We want to explain the Income according to the Age. There are missing values in the Income. 
+
+* If the observations are MCAR, the missingness of the Income does not depend on the Age or the Income. 
+* If the observations are MAR, the missingness of the Income does not depend on the Income but may depend on the Age. For example, it occurs if young and old people are less likely to give their incomes than middle-aged ones. 
+* If the observations are MNAR, the missingness of the Income depends on the Income itself and may depend on the Age. A possible interpretation is that very rich or poor people are less likely to give their incomes. In this specific case, the Income is missing for extreme values. 
+
+#### 1.1.1) b) More precise formulations
+
+The previous definitions are widely used in the litterature. However, there is some ambiguity.
+
+Recently Murray (see https://projecteuclid.org/download/pdfview_1/euclid.ss/1525313139) proposed a more precise definition for the MAR mechanism, given as follows:
+$$\mathbb{P}_M(M=\tilde{m}|X_{\text{OBS}}(\tilde{m})=\tilde{x}_{\text{OBS}},X_{\text{MIS}}(\tilde{m})=x_{\text{MIS}},\phi)
+\text{ takes the same value for all } x_{\text{MIS}} \text{ and } \phi.$$
+
+
+$\tilde{m}$ and $\tilde{x}_{\text{OBS}}$ denote the realised values *for a specific sample* of $M$ and $X_{\text{OBS}}$; $x_{\text{MIS}}$ is a realised value *for any sample* of $X_{\text{MIS}}$. 
+
+
+There are different points of focus: 
+
+* We distinguish well the random variables (exemple: $M$) from realised values (exemple: $\tilde{m}$). 
+* The statement holds for the realised values from a specific sample. Therefore, it is the so-called realised MAR mechanism.
+* The observed values of the data depend on the missing data pattern, similarly for the missing values. To be clear, the observed values and the missing values also depend on the data. As a result, some authors write $X_{\text{OBS}}$ and  $X_{\text{MIS}}$ as functions of $M$ and $X$. 
+
+Let us give an example to understand the notion of "realised values from a specific sample". 
+
+If $\tilde{x}=\left(\begin{matrix} 
+		1 \\
+		4 \\
+		3 \\
+		10
+		\end{matrix}\right)$ and $\tilde{m}=\left(\begin{matrix} 
+		1 \\
+		1 \\
+		0 \\
+		1
+		\end{matrix}\right)$, thus $\tilde{x}_{\text{OBS}}=\left(\begin{matrix} 
+		1 \\
+		4 \\
+		10
+		\end{matrix}\right)$ and $\tilde{x}_{\text{MIS}}=\left(\begin{matrix} 
+		3
+		\end{matrix}\right)$.
+		
+The definition of the MAR mechanism may be rewritten as follows: $\forall \: a, b$ in the sample space of the second element of $X$,
+		$$\forall \phi, \mathbb{P}_M((1,0,1,1)^T|(1,a,3,10),\phi)=\mathbb{P}_M((1,0,1,1)^T|(1,b,3,10),\phi).$$
+
+This equality does not hold if the realised value of $M$ is $(0,1,1,1)^T$, since the realised values for the specific missing-data pattern $\tilde{m}$ are involved in the definition. 
+
+There is actually no consensus in the litterature whether the statement holds for the realised values from a specific sample or for any sample. Seaman (see https://arxiv.org/pdf/1306.2812.pdf) proposed two precise formulations to distinguish both cases. 
+In 2018, Pearl (see http://ftp.cs.ucla.edu/pub/stat_ser/r473.pdf) proposed another point of view for the mechanims by using graphical models. 
+
+### 1.1.2) Ignorable missing values
+Many statistical methods are based on estimating a parameter by maximizing the likelihood of the data. Assume that $X$ has a density, parametrized by some parameter $\theta$ that we want to estimate - if $X$ is Gaussian for instance we simply have $\theta = (\mu, \Sigma)$. Assume that $M$ also has a density parametrized by another parameter $\phi$ - for example the probability $p$ of a Bernoulli distribution. In some cases, estimating $\theta$ from an incomplete data  can be done in a simple way by _ignoring_, or "skipping" the missing data mechanism, as detailed below.
+
+We denote by $f(X,M;\theta, \phi)$ the joint density of the observed and missing entries and of the indicator of missingness conditioned on parameters $\theta$ and $\phi$. In the context of maximum likelihood estimation, we maximize with respect to $\theta$ the marginal density of the observed data $X_{\text{OBS}}$
+$$f(X_{\text{OBS}},M;\theta, \phi) = \int f(X_{\text{OBS}}, X_{\text{MIS}},M;\theta, \phi)\mathop{dX_{\text{MIS}}}.$$
+If the data are **MAR** (or **MCAR**), the following factorization holds
+$$f(X_{\text{OBS}}, X_{\text{MIS}},M;\theta, \phi) = f(X_{\text{OBS}}, X_{\text{MIS}};\theta) f(M|X_{\text{OBS}}; \phi).$$
+Plugging this in the expression of the marginal density we obtain $$f(X_{\text{OBS}},M;\theta, \phi) = \int f(X_{\text{OBS}}, X_{\text{MIS}};\theta) f(M|X_{\text{OBS}}; \phi)\mathop{dX_{\text{MIS}}},$$ 
+
+$$f(X_{\text{OBS}},M;\theta, \phi) = f(M|X_{\text{OBS}}; \phi)\int f(X_{\text{OBS}}, X_{\text{MIS}};\theta) \mathop{dX_{\text{MIS}}},$$
+$$f(X_{\text{OBS}},M;\theta, \phi) = f(M|X_{\text{OBS}}; \phi) f(X_{\text{OBS}};\theta) .$$
+If $\phi$ and $\theta$ are _distinct_ (the joint
+parameter space of ($\theta$, $\phi$) is the product of the parameter space of $\theta$ and the parameter space of $\phi$), as the term $f(M|X_{\text{OBS}}; \phi)$ does not depend on $\theta$, to estimate the ML of $\theta$ it is equivalent to maximize the likelihood $f(X_{\text{OBS}};\theta)$, i.e. to _ignore_ the missing data. 
+It really means that when doing inference, i.e. to get the ML estimates for parameters from an incomplete set, one can "simply" maximize the observed likelihood while ignoring the process that has generated missing values. 
+Consequently, most of the methods used in practice rely on the assumption that the data are **MAR**. If this assumption does not hold, it is necessary to specify a model for the missing values (i.e. for $f(M|X; \phi)$) to do inference for $\theta$.
+
+## 1.2) Two recommended methods:  EM / Multiple imputation
+
+Under the classical missing at random mechanism (MAR) assumption, the parameters can thus be estimated by maximizing the observed likelihood. To do so, it is possible to 
+use an Expectation-Maximization (EM) algorithm (Dempster, Laird, and Rubin, 1977) as detailled in the next paragraph - The  standard
+error of the parameters can be estimated using a supplemented Expectation-Maximization (SEM) algorithm (Meng
+and Rubin, 1991), Louis formulae, or a bootstrap approach.
+This is the first main strategy to do inference with missing values. In fact, it consists in adapting the statistical
+analysis (the estimation process) so that it can be applied on an incomplete data set.  It is tailored to a specific statistical method but it has two drawbacks: 1) it can be difficult
+to establish (EM algorithm can involve integral not easy to compute); 2) a specific algorithm has to be derived for each statistical method that we would like
+to apply. 
+
+This is why the second strategy, namely multiple imputation (MI) (Rubin, 1987, Little
+and Rubin, 1987, 2002) seems to have taken the lead.
+Imputation means replacing the missing values with plausible values to get a completed data. 
+The principle of _Multiple Imputation_ consists in predicting
+$M$ different values for each missing value, which leads to _M imputed data sets_. The variability
+across the imputations reflects the variance of the prediction of each missing entry. Then, MI
+consists in performing the statistical analysis on each imputed data set to estimate the parameter
+$\theta$ and then combining the results $(\theta_m)_{1≤m≤M}$ to provide a unique estimation for $\theta$ and for
+its associated variability using Rubin’s rules (Rubin, 1987). This ensures that the variance of the
+estimator is not underestimated and thus good coverage properties.
+
+What is important is that the aim of both approaches (EM and multiple imputation) is to estimate as well as possible the
+parameters and their variance despite missing values, i.e. taking into account the supplementary
+variability due to missing values. The goal is not to impute the entries as accurately as possible. In this case, we would speak about _single imputation_ where one get one imputed dataset.  
+
+# 2) ML inference with missing values 
+## 2.1) Expectation Maximization algorithm
+In the case where we are interested in estimating unknown parameters $\theta\in\mathbb{R}^d$ characterizing the model (such as $\mu$ and $\Sigma$ in the Gaussian example), the Expectation Maximization (EM) algorithm (Dempster et al. 1977) can be used when the joint distribution of the missing data $X_{\text{MIS}}$ and the observed data $X_{\text{OBS}}$ is explicit. For all $\theta\in\mathbb{R}^d$, let $f(X;\theta)$ be the probability density function of $X=(X_{\text{OBS}},X_{\text{MIS}})$. The EM algorithm aims at finding the estimate of $\theta$ that maximize the observed data log-likelihood, i.e. the probability density function of the observations:
+$$
+l(\theta;X_{\text{OBS}}) = \log f(X_{\text{OBS}};\theta) =\log \int f(X_{\text{OBS}},X_{\text{MIS}};\theta)\mathop{dX_{\text{MIS}}}.
+$$
+As this quantity cannot be computed explicitly in general cases, the EM algorithm finds the MLE by iteratively maximizing the expected complete-data log-likelihood. We denote the complete-data log-likelihood as $$l(X;\theta) = \log f(X_{\text{OBS}},X_{\text{MIS}};\theta).$$
+Start with an inital value $\theta^{(0)}$ and let $\theta^{(t)}$ be the estimate of $\theta$ at $t$th iteration, then the next iteration of EM consists of two steps:
+
+* *E step.* Compute the expectation of complete-data log-likelihood, with respect to the conditional distribution of missing covariate parameterized by $\theta^{(t)}$:
+$$
+Q(\theta,\theta^{(t)}) =\mathbb{E}\left[l(X;\theta)|X_{\text{OBS}};\theta^{(t)} \right]=\int l(X;\theta)f(X_{\text{MIS}}|X_{\text{OBS}};\theta^{(t)}) \mathop{dX_{\text{MIS}}} ,
+$$
+* *M step.* Determine $\theta^{(t+1)}$ by maximizing the function Q:
+$$\theta^{(t+1)}\in \mbox{argmax}_\theta Q(\theta,\theta^{(t)})$$
+
+The following crucial property motivates the EM algorithm. 
+
+*Property:* For all $\theta,\theta^{(t)}$,
+$$
+l(X_{\text{OBS}};\theta) - l(X_{\text{OBS}};\theta^{(t)}) \ge Q(\theta,\theta^{(t)})-Q(\theta^{(t)},\theta^{(t)})\,.
+$$
+Therefore, any value $\theta$ ,which improves $Q(\theta,\theta^{(t)})$ beyond reference value $Q(\theta^{(t)},\theta^{(t)})$, won't decrease the observed-data likelihood. Based on this inequality, the EM algorithm produces iteratively a sequence of parameter estimates $\left(\theta^{(t)}\right)_{t\ge 0}$. 
+
+The practical interest of this algorithm can be assessed only in cases where $Q(\theta,\theta^{(t)})$ can be computed (or estimated) with a reasonable computational cost (see for instance the special case where $f_{\theta}$ belongs to the exponential family) and when $\theta \mapsto Q(\theta,\theta^{(t)})$ can be maximized (at least numerically).
+
+Assume first that the complete data $(X)$ has a multivariate normal distribution $\mathcal{N}(\mu,\Sigma)$. The parameters $\mu$ and $\Sigma$ may be estimated using maximum likelihood based procedures for incomplete data models such as the Expectation Maximization algorithm detailed above.
+In R,  we can estimate the mean and covariance matrix with EM with: 
+
+```{r}
+library(norm)
+data(mdata)
+pre <- prelim.norm(as.matrix(mdata))
+thetahat <- em.norm(pre)
+getparam.norm(pre, thetahat)
+```
+
+### 2.1.1) Exercice: EM for bivariate Gaussian data 
+
+The purpose of this problem is to use the EM algorithm to estimate the mean of a bivariate normal dataset with missing entries in one of the two variables. We first generate synthetic data and then implement the EM algorithm to compute the estimator of the mean.
+
+```{r libraries}
+library(mvtnorm)
+```
+
+We consider a bivariate normal random variable $y=\begin{pmatrix}
+y_1\\ 
+y_2
+\end{pmatrix}$, and denote the mean vector and covariance matrix of its distribution as $\mu=\begin{pmatrix}
+\mu_1\\ 
+\mu_2
+\end{pmatrix}$ and $\Sigma=\begin{pmatrix}
+\sigma_{11} & \sigma_{12}\\ 
+\sigma_{12} & \sigma_{22}
+\end{pmatrix}$, i.e, $y\sim \mathcal{N}(\mu, \Sigma)$. The dataset has $n$ samples that contain some missing values only in the variable $y_2$. That is to say, given a certain index of samples $r\leq n$, for $i=1,..., r$, $(y_{i1},y_{i2})$ are fully observed; while for $i=r+1,... n$, we only observe $y_{i1}$. The goal is to estimate the mean $\mu$. We will compare two strategies: 
+
+1. Direct computation of the maximum likelihood estimate
+2. Estimation with the EM algorithm.
+
+####  Data generation
+
+__(R1)__ Generate a bivariate normal set of sample size $n=100$, with mean and the covariance matrix, respectively: 
+$$\begin{pmatrix}
+\mu_1\\ 
+\mu_2
+\end{pmatrix}=\begin{pmatrix}
+5\\ 
+-1
+\end{pmatrix}
+\quad \text{and} \quad
+\begin{pmatrix}
+\sigma_{11} & \sigma_{12}\\ 
+\sigma_{12} & \sigma_{22}
+\end{pmatrix}=\begin{pmatrix}
+1.3 & 0.4\\ 
+0.4 & 0.9
+\end{pmatrix},$$ 
+containing 30% of missing values only in the variable $y_2$.
+
+<div class="hiddensolution">
+```{r}
+set.seed(100)
+
+n <- 100
+r <- floor(n*0.3)
+mu <- c(5, -1)
+Sigma <- matrix(c(1.3, 0.4,0.4,0.9), nrow=2)
+Y <- rmvnorm(n, mean=mu, sigma=Sigma)
+missing_idx <-sample(100, r, replace = FALSE)
+Y[missing_idx, 2] <- NA
+```
+</div>
+
+#### Maximum likelihood estimate
+
+We denote by $f_{1,2}(y_1,y_2;\mu, \Sigma)$, $f_1(y_1;\mu_1, \sigma_{11})$ and $f_{2|1}(y_2|y_1; \mu, \Sigma)$, respectively, the probability of joint distribution of $(y_1,y_2)$, marginal distribution of $y_1$ and conditional distribution of $y_2|y_1$. The joint distribution of observed data can be decomposed as:
+$$f_{1,2}(y_1,y_2;\mu, \Sigma)=\prod_{i=1}^nf_1(y_{i1};\mu_1, \sigma_{11})\prod_{j=1}^rf_{2|1}(y_{j2}|y_{j1}; \mu, \Sigma),$$
+and the observed log-ikelihood is written (up to an additional constant that does not appear in the maximization and that we therefore drop):
+
+$$l(\mu, \Sigma;y_1,y_2)=-\frac{n}{2}\log(\sigma_{11}^2)-\frac{1}{2}\sum_{i=1}^n\frac{(y_{i1}-\mu_1)^2}{\sigma_{11}^2}-\frac{r}{2}\log \left((\sigma_{22}-\frac{\sigma_{12}^2}{\sigma_{11}})^2\right)$$
+$$-\frac{1}{2}\sum_{i=1}^r\frac{\left(y_{i2}-\mu_2-\frac{\sigma_{12}}{\sigma_{11}}(y_{i1}-\mu_1)\right)^2}{(\sigma_{22}-\frac{\sigma_{12}^2}{\sigma_{11}})^2}$$
+
+
+We skip the computations and directly give the expression of the closed form maximum likelihood estimates of the mean:
+$$  {\hat{\mu}}_1=n^{-1}\sum_{i=1}^ny_{i1} $$
+$$  \hat{\mu}_2=\hat{\beta}_{20.1}+\hat{\beta}_{21.1}\hat{\mu}_1,$$
+where
+$$\hat{\beta}_{21.1}=s_{12}/s_{11}, \quad \hat{\beta}_{20.1}=\bar{y}_2-\hat{\beta}_{21.1}\bar{y}_1,$$ $$\bar{y}_j=r^{-1}\sum_{i=1}^ry_{ij} \quad \text{and} \quad s_{jk}=r^{-1}\sum_{i=1}^r(y_{ij}-\bar{y}_j)(y_{ik}-\bar{y}_k), \quad j,k=1,2.$$
+
+
+__(R2)__ Compute the maximum likelihood estimates of $\mu_1$ and $\mu_2$.
+
+<div class="hiddensolution">
+```{r MLest}
+hat_mu1_ML <- (1/n)*sum(Y[,1])
+bar_y1 <- mean(Y[setdiff(1:n,missing_idx), 1]) # mean(Y[!((1:n)%in%missing_idx), 1])
+bar_y2 <-mean(Y[setdiff(1:n,missing_idx), 2])
+s_11 <- mean((Y[setdiff(1:n,missing_idx),1]-bar_y1)^2)
+s_22 <- mean((Y[setdiff(1:n,missing_idx),2]-bar_y2)^2)
+s_12 <- mean((Y[setdiff(1:n,missing_idx),1]-bar_y1)*(Y[setdiff(1:n,missing_idx),2]-bar_y2))
+hat_beta_21.1 <- s_12/s_11
+hat_beta_20.1 <- bar_y2-hat_beta_21.1*bar_y1
+hat_mu2_ML <- hat_beta_20.1+hat_beta_21.1*hat_mu1_ML
+resML <- c(hat_mu1_ML=hat_mu1_ML,hat_mu2_ML=hat_mu2_ML)
+```
+</div>
+
+#### EM algorithm
+
+In this simple setting, we have an explicit expression of the maximum likelihood estimator despite missing values. However, this is not always the case but it is possible to use an EM algorithm which allows to get the maximum likelihood estimators in the cases where data are missing.
+
+The EM algorithm consists in maximizing the "observed likelihood" 
+$$l(\mu, \Sigma; y_1,y_2)=-\frac{n}{2}\log(\sigma_{11}^2)-\frac{1}{2}\sum_{i=1}^n\frac{(y_{i1}-\mu_1)^2}{\sigma_{11}^2}-\frac{r}{2}\log((\sigma_{22}-\frac{\sigma_{12}^2}{\sigma_{11}})^2)$$
+$$-\frac{1}{2}\sum_{i=1}^r\frac{(y_{i2}-\mu_2-\frac{\sigma_{12}}{\sigma_{11}}(y_{i1}-\mu_1))^2}{(\sigma_{22}-\frac{\sigma_{12}^2}{\sigma_{11}})^2},$$
+through successive maximization of the "complete likelihood" (if we had observed all $n$ realizations of $y_1$ and $y_2$). Maximizing the complete likelihood 
+$$l_c(\mu, \Sigma;y_1,y_2)=-\frac{n}{2}\log\left(\det(\Sigma)\right)-\frac{1}{2}\sum_{i=1}^n(y_{i1}-\mu_1)^T\Sigma^{-1}(y_{i1}-\mu_1)$$
+
+would be straightforward if we had all the observations. However elements of this likelihood are not available. Consequently, we replace them by the conditional expectation given observed data and the parameters of the current iteration. These two steps of computation of the conditional expectation (E-step) and maximization of the completed likelihood (M step) are repeated until convergence. 
+
+The update formulas for the E and M steps are the following  
+
+__E step__:
+
+The sufficient statistics of the likelihood are:  
+
+$$s_1=\sum_{i=1}^ny_{i1},\quad s_2=\sum_{i=1}^ny_{i2},\quad s_{11}=\sum_{i=1}^ny_{i1}^2,\quad s_{22}=\sum_{i=1}^ny_{i2}^2,\quad s_{12}=\sum_{i=1}^ny_{i1}y_{i2}.$$
+
+Since some values of $y_2$ are not available, we fill in the sufficient statistics with:
+
+$$E[y_{i2}|y_{i1};\mu,\Sigma]=\beta_{20.1}+\beta_{21.1}y_{i1}$$
+$$E[y_{i2}^2|y_{i1};\mu,\Sigma]=(\beta_{20.1}+\beta_{21.1}y_{i1})^2+\sigma_{22.1}$$
+$$E[y_{i2}y_{i2}|y_{i1};\mu,\Sigma]=(\beta_{20.1}+\beta_{21.1}y_{i1})y_{i1}.$$
+
+__M step__: 
+
+The M step consists in computing the maximum likelihood estimates as usual. 
+Given $s_1, s_2, s_{11}, s_{22}, \text{and } s_{12},$ update $\hat{\mu}$ and $\hat{\sigma}$ with
+$$\hat{\mu}_1=s_1/n\text{, }\hat{\mu}_2=s_2/n,$$
+$$\hat{\sigma}_1=s_{11}/n-\hat{\mu}_1^2\text{, }\hat{\sigma}_2=s_{22}/n-\hat{\mu}_2^2\text{, }\hat{\sigma}_{12}=s_{12}/n-\hat{\mu}_1\hat{\mu}_2$$
+
+Note that $s_1$, $s_{11}$, $\hat{\mu}_1$ and $\hat{\sigma}_1$ are constant accross iterations since we do not have missing values on $y_1$.
+
+__(R3)__ Write two functions that respectively perform the E step and the M step, named as "Estep" and "Mstep". 
+
+Hint: The "Estep" function can take $\mu$ and $\Sigma$ as inputs. Then, you can compute $\beta_{21.1}=\sigma_{12}/\sigma_{11}$, $\beta_{20.1}=\mu_2-\beta_{21.1}\mu_1$, and $\sigma_{22.1}=\sigma_{22}-\sigma^2_{12}/\sigma_{11}$, and update the sufficient statistics $s_{ij}$.
+The "Mstep"" function consists in updating $\mu$ and $\Sigma$ given the $s_{ij}$.
+
+<div class="hiddensolution">
+```{r EandMsteps}
+Estep=function(Y, mu, Sigma, missing_idx)
+{
+n=nrow(Y)
+sigma_22.1=Sigma[2,2]-Sigma[1,2]^2/Sigma[1,1]
+beta_21.1=Sigma[1,2]/Sigma[1,1]
+beta_20.1=mu[2]-beta_21.1*mu[1]
+
+E_y2=rep(0, n)
+E_y2[missing_idx]=rep(beta_20.1, length(missing_idx))+beta_21.1*Y[missing_idx,1]
+E_y2[setdiff(1:n, missing_idx)]=Y[setdiff(1:n, missing_idx),2]
+E_y1=Y[,1]
+E_y2_y2=rep(0, n)
+E_y2_y2[missing_idx]=E_y2[missing_idx]^2+rep(sigma_22.1, length(missing_idx))
+E_y2_y2[setdiff(1:n, missing_idx)]=E_y2[setdiff(1:n, missing_idx)]^2
+E_y1_y1=Y[,1]^2
+E_y1_y2=rep(0, n)
+E_y1_y2=E_y2*E_y1
+return(structure(list(s1=sum(E_y1), s2=sum(E_y2), s11=sum(E_y1_y1), s22=sum(E_y2_y2), s12=sum(E_y1_y2))))
+}
+
+Mstep=function(Y, s1, s2, s11, s22, s12)
+{
+n=nrow(Y)
+mu1=s1/n
+mu2=s2/n
+sigma1=s11/n-mu1^2
+sigma2=s22/n-mu2^2
+sigma12=s12/n-mu1*mu2
+mu=c(mu1,mu2)
+Sigma=matrix(c(sigma1, sigma12,sigma12,sigma2), nrow=2)
+return(structure(list(mu=mu, Sigma=Sigma)))
+}
+```
+</div>
+__(Q1)__ How could we initialize the algorithm ?
+
+__(R4)__ Implement a function called initEM that returns initial values for $\hat{\mu}$ and $\hat{\Sigma}$.
+
+<div class="hiddensolution">
+```{r init}
+
+initEM=function(Y, missing_idx)
+{
+n=nrow(Y)
+r=n-length(missing_idx)
+mu1=mean(Y[,1])
+mu2=mean(Y[,2], na.rm=T)
+sigma1=mean(Y[,1]^2)-mu1^2
+sigma2=mean(Y[,2]^2, na.rm=T)-mu2^2
+sigma12=mean(Y[,1]*Y[,2], na.rm=T)-mu1*mu2
+mu=c(mu1,mu2)
+Sigma=matrix(c(sigma1, sigma12,sigma12,sigma2), nrow=2)
+return(structure(list(mu=mu, Sigma=Sigma)))
+}
+```
+</div>
+
+__(R5)__ Implement the EM algorithm over 50 iterations and plot the value of $\left\|\mu-\hat{\mu}\right\|^2$ over iterations. Comment your results briefly.
+
+<div class="hiddensolution">
+```{r EM}
+init=initEM(Y, missing_idx)
+hat_mu=init$mu
+hat_Sigma=init$Sigma
+error_mu=rep(0,50)
+for(i in 1:50)
+{
+error_mu[i]=sqrt(sum((hat_mu-mu)^2))
+# E step
+E=Estep(Y, hat_mu, hat_Sigma, missing_idx)
+s1=E$s1
+s11=E$s11
+s2=E$s2
+s22=E$s22
+s12=E$s12
+M=Mstep(Y, s1, s2, s11, s22, s12)
+hat_mu=M$mu
+print(hat_mu)
+hat_Sigma=M$Sigma
+}
+plot(error_mu)
+```
+</div>
+__(R6)__ Check that the EM estimator $\mu$ is equal to the maximum likelihood estimator.
+
+<div class="hiddensolution">
+```{r MLvsEM}
+resEM <- hat_mu
+resEM 
+resML
+```
+</div>
+
+__(Q7)__  One remark is that the fraction of missing information is not the same as the percentage of missing data. Please calculate these two terms.
+
+Hint: The fraction of missing information can be estimated by the convergence rate: $\lambda^{(t)}=\frac{\mu_2^{(t+1)}-\mu_2^{(t)}}{\mu_2^{(t)}-\mu_2^{(t-1)}}$ in the $t$th iteration.
+
+(See part 2.2 for further explanation of missing information)
+
+<div class="hiddensolution">
+```{r missfrac}
+init=initEM(Y, missing_idx)
+hat_mu=init$mu
+old_hat_mu = old_old_hat_mu = 0
+hat_Sigma=init$Sigma
+error_mu=rep(0,20)
+for(i in 1:20)
+{
+old_old_hat_mu = old_hat_mu
+old_hat_mu = hat_mu
+# E step
+E=Estep(Y, hat_mu, hat_Sigma, missing_idx)
+s1=E$s1
+s11=E$s11
+s2=E$s2
+s22=E$s22
+s12=E$s12
+M=Mstep(Y, s1, s2, s11, s22, s12)
+hat_mu=M$mu
+hat_Sigma=M$Sigma
+if(i>=3){cat('Iteration=',i,", Convergence rate of mu2 =",(hat_mu-old_hat_mu)[2]/(old_hat_mu-old_old_hat_mu)[2],'\n')}
+}
+cat("Percentage of missingness is:", sum(is.na(Y[,2]))/dim(Y)[1])
+```
+
+__(R7)__ We can check that if the data are not MCAR but MNAR, there is a bias in the estimators and it is thus necessary to specify a model for the missing values. The MNAR data are generated by using a censorship. 
+
+```{r}
+set.seed(1)
+
+n <- 100
+r <- floor(n*0.3)
+mu <- c(5, -1)
+Sigma <- matrix(c(1.3, 0.4,0.4,0.9), nrow=2)
+Y <- rmvnorm(n, mean=mu, sigma=Sigma)
+
+missing_idx_MCAR <-sample(100, r, replace = FALSE) 
+Y1 <- Y
+Y1[missing_idx_MCAR, 2] <- NA
+
+missing_idx_MNAR <-which(Y[,2]>sort(Y[,2],decreasing=TRUE)[r+1])
+Y2 <- Y
+Y2[missing_idx_MNAR, 2] <- NA
+```
+
+```{r}
+#MAR
+init1=initEM(Y1, missing_idx_MCAR)
+hat_mu_MCAR=init1$mu
+hat_Sigma_MCAR=init1$Sigma
+error_mu=rep(0,50)
+for(i in 1:50)
+{
+error_mu[i]=sqrt(sum((hat_mu_MCAR-mu)^2))
+# E step
+E=Estep(Y1, hat_mu_MCAR, hat_Sigma_MCAR, missing_idx_MCAR)
+s1=E$s1
+s11=E$s11
+s2=E$s2
+s22=E$s22
+s12=E$s12
+M=Mstep(Y1, s1, s2, s11, s22, s12)
+hat_mu_MCAR=M$mu
+hat_Sigma_MCAR=M$Sigma
+}
+
+#MNAR
+init2=initEM(Y2, missing_idx_MNAR)
+hat_mu_MNAR=init2$mu
+hat_Sigma_MNAR=init2$Sigma
+error_mu=rep(0,50)
+for(i in 1:50)
+{
+error_mu[i]=sqrt(sum((hat_mu_MNAR-mu)^2))
+# E step
+E=Estep(Y2, hat_mu_MNAR, hat_Sigma_MNAR, missing_idx_MNAR)
+s1=E$s1
+s11=E$s11
+s2=E$s2
+s22=E$s22
+s12=E$s12
+M=Mstep(Y2, s1, s2, s11, s22, s12)
+hat_mu_MNAR=M$mu
+hat_Sigma_MNAR=M$Sigma
+}
+
+print(hat_mu_MCAR)
+print(hat_mu_MNAR)
+print(hat_Sigma_MCAR)
+print(hat_Sigma_MNAR)
+
+```
+
+
+
+
+
+</div>
+### 2.1.2) EM for logistic regression with missing values
+
+This part is a summary of the paper 
+Stochastic Approximation EM for Logistic regression with missing values [(2018, Jiang W., Josse J., Lavielle M., Gauss T.)](https://arxiv.org/pdf/1805.04602.pdf). The code associated is [available](https://github.com/wjiang94/miSAEM_logReg).
+
+#### Logistic regression model
+Let $(Y,X)$ be the observed data with $Y=(Y_i , 1\leq i \leq n)$  an $n$-vector of binary responses coded with $\{0, 1\}$ and $X= (X_{ij}, 1\leq i \leq n, 1 \leq j \leq p)$ a $n\times p$ matrix of covariates,  where $X_{ij}$ takes its values in $\mathbb{R}$. 
+The logistic regression model for binary classification can be written as:   
+$$
+\mathbb{P}({Y_i=1|X_i;\beta})= 
+\frac{\exp(\beta_0 + \sum_{j=1}^p \beta_j X_{ij})}
+{ 1+\exp(\beta_0 + \sum_{j=1}^p \beta_j X_{ij}) }, 
+\quad i=1,\ldots,n,
+$$
+where $\beta_0,\beta_1,\ldots,\beta_p$ are unknown parameters. We adopt a probabilistic framework by assuming that
+ $X_i = (X_{i1},\ldots, X_{ip})$ is normally distributed:
+$$
+X_i \mathop{\sim}_{\rm i.i.d.} \mathcal{N}_p(\mu,\Sigma), \quad i=1,\cdots,n. 
+$$
+Let $\theta=(\mu, \Sigma, \beta)$ be the set of parameters of the model. Then, the log-likelihood for the complete data can be written as:
+$$
+l(\theta;X,Y) =\sum_{i=1}^n l(\theta;X_i,Y_i) 
+=\sum_{i=1}^n \Big( \log f(Y_i|X_i;\beta)+\log f(X_i;\mu,\Sigma) \Big).
+$$
+
+Our main goal is to estimate the vector of parameters $\beta=(\beta_j,0\leq j \leq p)$ when missing values (MAR) exist in the design matrix: $X=(X_{\text{OBS}},X_{\text{MIS}})$.
+
+#### A stochatic approximation version of EM
+Since there is no explicit expression to calculate expectation in E step, a Monte Carlo version of EM  (Ibrahim, Chen and Lipsitz, 1999) can be used.  The E-step of MCEM generates a large number of samples of missing data from the target distribution $f(X_{\text{MIS}}|X_{\text{OBS}},Y;\theta)$ and replaces the expectation of the complete log-likelihood by an empirical mean. However, an accurate Monte Carlo approximation of the E-step may require a significant computational effort. To achieve improved computational efficiency, Stochastic approximation EM algorithm (Lavielle, 2014, book) replaces the E-step by a stochastic approximation based on a single simulation of $X_{\text{MIS}}$. Starting from an initial guess $\theta^{(0)}$, the $t$th iteration consists of three steps:
+
+* Simulation: For $i=1,2,\cdots,n$, draw a single sample $X_{\text{MIS}}^{(t)}$ from the conditional distribution of missing variables:  $f(X_{\text{MIS}}|X_{\text{OBS}},Y;\theta^{(t-1)})$.
+* Stochastic approximation: Update the function $Q$, i.e., the expected complete-data log-likelihood, according to 
+$$
+Q(\theta,\theta^{(t)})=Q(\theta,\theta^{(t-1)})+\gamma_t\left(l(\theta ;X_{\text{OBS}},X_{\text{MIS}}^{(t)},Y)-Q(\theta,\theta^{(t-1)})\right),
+$$
+where $(\gamma_t)$ is a decreasing sequence of positive numbers.
+* Maximization: update the estimation of $\theta$:
+
+$$
+\theta^{(t+1)} = argmax_{\theta}Q(\theta,\theta^{(t)}).
+$$
+
+Let's illustrate the use of the package on a simulated data.
+
+```{r saem}
+library(devtools)
+install_github("wjiang94/misaem")
+library(misaem)
+# Generate dataset
+N <- 1000  # number of subjects
+p <- 5     # number of explanatory variables
+mu.star <- 1:p  #rep(0,p)  # mean of the explanatory variables
+sd <- 1:p # rep(1,p) # standard deviations
+C <- matrix(c(   # correlation matrix
+1,   0.8, 0,   0,   0,
+0.8, 1,   0,   0,   0,
+0,   0,   1,   0.3, 0.6,
+0,   0,   0.3, 1,   0.7,
+0,   0,   0.6, 0.7, 1), nrow=p)
+Sigma.star <- diag(sd)%*%C%*%diag(sd) # variance-covariance matrix of the explanatory variables
+beta.star <- c(0.5, -0.3, 1, 0, -0.6) # coefficients
+beta0.star <- -0.2  # intercept
+X.complete <- matrix(rnorm(N*p), nrow=N)%*%chol(Sigma.star) + matrix(rep(mu.star,N), nrow=N, byrow = TRUE)
+p1 <- 1/(1+exp(-X.complete%*%beta.star-beta0.star))
+y <- as.numeric(runif(N)<p1)
+
+# Generate missingness
+p.miss <- 0.10
+patterns <- runif(N*p)<p.miss # missing completely at random
+X.obs <- X.complete
+X.obs[patterns] <- NA
+
+# SAEM
+list.saem = miss.saem(X.obs, y, print_iter = FALSE)
+print(list.saem$beta)
+```
+
+## 2.2) Variance of the estimator with missing values
+### 2.2.1) Fisher information matrix
+The Fisher information (or information) is a way of measuring the amount of information that an observable random variable $X$ carries about an unknown parameter $\theta$ of the probability density function of $X$. 
+
+In the case without missing values, suppose that the log likelihood is $l(\theta;X)=\log f(X;\theta)$. The Fisher information $\mathcal{I}({\theta})$ is defined as:
+
+$$\mathcal{I}({\theta})=\mathbb{E} \Bigg[
+\Big( \frac{\partial}{\partial {\theta}} l({\theta};{X}) \Big) \Big( \frac{\partial}{\partial {\theta}} l({\theta};{X}) \Big)^T \Bigg]
+$$
+
+
+Under specific regularity conditions, the Fisher information can be written as 
+
+$$\mathcal{I}({\theta}) =- \mathbb{E} \Big[  \frac{\partial^2l({\theta};{x})}{\mathop{\partial {\theta}} \mathop{\partial {\theta}^T}}  \Big]
+$$ 
+
+### Relation among Fisher information matrices
+We write the factorization of complete-data distribution as
+$$f(X;\theta)=f({X}_{\text{OBS}};\theta)f(X_{\text{MIS}}|X_{\text{OBS}};\theta),$$
+then, the observed log-likelihood can be written as
+$$
+l({\theta};{X}_{\text{OBS}}) = l({\theta};X) - \log f(X_{\text{MIS}}|X_{\text{OBS}};\theta).
+$$
+Differentiate both sides twice with respect to $\theta$:
+$$
+\frac{\partial^2 l({\theta};{X}_{\text{OBS}})}{\mathop{\partial {\theta}} \mathop{\partial {\theta}^T}}=\frac{\partial^2 l({\theta};{X})}{\mathop{\partial {\theta}} \mathop{\partial {\theta}^T}} -\frac{\partial^2 \log f(X_{\text{MIS}}|X_{\text{OBS}};\theta)}{\mathop{\partial {\theta}} \mathop{\partial {\theta}^T}}.
+$$
+The expectation of both sides over the distribution of the missing data $X_{\text{MIS}}$ conditional on $X_{\text{OBS}}$ is:
+
+$$
+\frac{\partial^2 l({\theta};{X}_{\text{OBS}})}{\mathop{\partial {\theta}} \mathop{\partial {\theta}^T}}=\frac{\partial^2 \mathbb{E}\left(l({\theta};{X})\Big|X_{\text{OBS}};\theta\right)}{\mathop{\partial {\theta}} \mathop{\partial {\theta}^T}}-
+\frac{\partial^2 \mathbb{E}\left(\log f(X_{\text{MIS}}|X_{\text{OBS}};\theta)\Big|X_{\text{OBS}};\theta\right)}{\mathop{\partial {\theta}} \mathop{\partial {\theta}^T}}.
+$$
+
+If we denote: 
+
+* the complete information:
+
+$$\mathcal{I}_{\text{COM}}(\theta)=\frac{\partial^2 \mathbb{E}\left(l({\theta};{X})\Big|X_{\text{OBS}};\theta\right)}{\mathop{\partial {\theta}} \mathop{\partial {\theta}^T}},$$
+* the observed information:
+
+$$\mathcal{I}_{\text{OBS}}(\theta)=\frac{\partial^2 l({\theta};{X}_{\text{OBS}})}{\mathop{\partial {\theta}} \mathop{\partial {\theta}^T}},$$
+*  the missing information:
+
+$$\mathcal{I}_{\text{MIS}}(\theta)=\frac{\partial^2 \mathbb{E}\left(\log f(X_{\text{MIS}}|X_{\text{OBS}};\theta)\Big|X_{\text{OBS}};\theta\right)}{\mathop{\partial {\theta}} \mathop{\partial {\theta}^T}},$$
+
+then we have
+$$
+\mathcal{I}_{\text{OBS}}(\theta)=\mathcal{I}_{\text{COM}}(\theta)-\mathcal{I}_{\text{MIS}}(\theta)
+$$
+
+### Louis formula
+Louis formula (Louis, 1982) rewrites the missing information in terms of complete data quantities and shows that 
+$$
+\mathcal{I}_{\text{MIS}}(\theta) = \mathbb{E}\left[\frac{\partial l({\theta};X)}{\partial{\theta}} \frac{\partial l({\theta};X)}{\partial {\theta}^T}\Big|X_{\text{OBS}};\theta  \right]
+-\frac{\partial l({\theta};X_{\text{OBS}})}{\partial {\theta}} \frac{\partial l({\theta};X_{\text{OBS}})}{\partial {\theta}^T}
+$$
+
+In particular at the MLE $\hat{\theta}$, we have $\frac{\partial l({\theta};X_{\text{OBS}})}{\partial {\theta}} \Big|_{{\theta}=\hat{{\theta}}} = 0$, so the last term of $\mathcal{I}_{\text{MIS}}(\theta)$ vanishes and
+
+$$\mathcal{I}_{\text{MIS}}(\hat\theta)=\mathbb{E}\left[\frac{\partial l({\theta};X)}{\partial{\theta}} \frac{\partial l({\theta};X)}{\partial {\theta}^T}\Big|X_{\text{OBS}};\theta  \right] \Big|_{\theta=\hat\theta}$$
+Then we can calculate the asymptotic matrix of variance as
+$$\hat{V}=\mathcal{I}_{\text{OBS}}^{-1}(\hat\theta)=\left(\mathcal{I}_{\text{COM}}(\hat\theta) -\mathcal{I}_{\text{MIS}}(\hat\theta)\right)^{-1}$$
+
+As an example, the package misaem implements the estimation of variance matrix by Louis formula in the logistic regression model.
+```{r saemvar}
+list.saem = miss.saem(X.obs, y, print_iter = FALSE, var_cal = TRUE)
+print(list.saem$var_obs)
+```
+
+
+## 2.3) Bootstrap
+
+The bootstrap method is another way to estimate the variance of the parameters with missing values. (Efron, 1994).
+
+# 3) Single imputation
+
+The practice of single imputation, \emph{i.e.} replacing missing values by plausible values can be dangerous ("The idea of imputation is both seductive and dangerous. It is
+seductive because it can lull the user into the pleasurable state of
+believing that the data are complete after all, and it is dangerous
+because it lumps together situations where the problem is
+sufficiently minor that it can be legitimately handled in this way
+and situations where standard estimators applied to the real and
+imputed data have substantial biases." (Dempster and Rubin, 1983)). Indeed, if a statistical analysis is performed on an imputed data set, the variance of the estimator is too short since the variability of the missing values prediction is not taken into account. That's why, multiple imputation is recommended. 
+Nevertheless, single imputation, is still paid attention in the statistical literature. This can be appropriate when one just needs to complete a single data set or when no inference is required. In addition, single imputation is a first step to multiple imputation.
+
+There is a huge literature on imputation methods for continuous data or categorical data (Little and Rubin, 2002). 
+
+## 3.1) Single imputation with the means or with regression - bivariate case
+
+Single imputation methods fill in missing values with plausible
+values which leads to a completed dataset that can be analysed by any statistical method. However, the most classical imputation methods have drawbacks that have been well documented in the literature. The famous mean imputation preserves the mean of the imputed variable but reduces its variance and distorts the correlation with the other variables. 
+
+_Mean imputation is really a method not to be recommended_. Its consequences are disastrous (see the example of ecological data). In the case of MCAR values, it is really preferable to suppress observations that have missing data (indeed, we end up with just a small sample size but the estimators calculated on this sample will be unbiased but necessarily more variable) rather than imputing by the mean which can lead to biased estimators.
+
+Imputing by regression for example
+improves the imputation taking into account the relationship between variables. However, the marginal and joint distribution of the variables are still distorted. These distributions can be
+preserved using more complex imputation methods such as the stochastic regression imputation. The latter consists in imputing with the predicted values from a regression model plus a random
+noise drawn from a normal distribution with variance equal to the residual variance. 
+
+### 3.1.1) Ex: Illustration of single imputation methods
+
+The aim is to assess different strategies to handle missing values: deletion, mean imputation, regression imputation, stochastic regression imputation. Then, to tackle the issues of single imputation, multiple imputation will be used.
+
+1. Generate bivariate data with $n = 100$ drawn from a Gaussian distribution with $\mu_y = \mu_x = 125$, standard deviation $\sigma_y = \sigma_x = 25$ and correlation $\rho = 0.6$. You should use the rmvnorm function from the mvtnorm library. We note $\theta = \mu_y$.
+
+<div class="hiddensolution">
+```{r eval=TRUE}
+library(mvtnorm)
+n <- 100
+sigma <- matrix(c(625,375,375,625), ncol=2)
+don <- rmvnorm(n, mean = c(125,125), sigma = sigma)
+```
+</div>
+
+2. Plot the data.
+
+<div class="hiddensolution">
+```{r include = TRUE, eval=TRUE, warning=FALSE}
+colnames(don) <- c("X","Y")
+don <- as.data.frame(don)
+library(ggplot2)
+ggplot(don) + aes(x=X, y=Y) + geom_point(colour="blue")
+```
+</div>
+
+3. Introduce $73\%$ of missing completely at random (MCAR) values on one variable (denoted $y$). 
+
+<div class="hiddensolution">
+```{r include = TRUE, eval=TRUE, warning=FALSE}
+donmiss <- don
+indNA <- sample(1:n, 0.73*n)
+donmiss[indNA, 2] <- NA
+```
+</div>
+
+A very popular approach to handle missing values consists in replacing the missing entries by plausible values to get a completed data set that can be analyzed by any statistical method. The most popular strategy consists of imputing with the mean of the observed values. But you may want to take into account the relationship between variables and impute with regression for instance. However, in order to preserve as well as possible the joint and marginal distributions you may prefer imputing by stochastic regression which means adding to the imputation by regression a random draw from a Gaussian distribution with mean zero and variance equals to the residuals variance. Let us assess these approaches.
+
+#### Mean imputation
+<div class="hiddensolution">
+```{r include = TRUE, eval=TRUE, warning=FALSE}
+donMean <- donmiss
+donMean[indNA, 2] <- mean(donMean[, 2],na.rm=T)
+imputed <- ((1:100)%in%indNA)
+ggplot(donMean) + ggtitle("mean imputation") + aes(x=X, y=Y, colour=imputed) + geom_point()
+```
+</div>
+
+#### Regression
+<div class="hiddensolution">
+```{r include = TRUE, eval=TRUE, warning=FALSE}
+reg <- lm(Y~X, data = donmiss)
+donReg <- donmiss
+donReg[indNA, 2] <- predict(reg, donmiss[indNA, 1,drop = F])
+ggplot(donReg) + ggtitle("regression imputation") + aes(x=X, y=Y, colour=imputed) + geom_point()
+```
+</div>
+
+#### Stochastic regression
+<div class="hiddensolution">
+```{r include = TRUE, eval=TRUE, warning=FALSE}
+donStochReg <- donmiss
+donStochReg[indNA, 2] <- donReg[indNA, 2] + rnorm(length(indNA), 0, (summary(reg))$sigma)
+ggplot(donStochReg) + ggtitle("stochastic regression imputation") + aes(x=X, y=Y, colour=imputed) + geom_point()
+```
+</div>
+
+It seems that we have solved the missing values issue with this stochastic regression imputation. The imputed data looks like the initial data.
+
+4. For each strategy (mean imputation, regression imputation, stochastic regression imputation), compute the empirical mean of $y$ ($\hat \theta = \bar y$), its standard deviation ($\hat \sigma_y$), the correlation between $x$ and $y$ ($r(X,Y)$), a confidence interval for $\mu_y$ and the width of the confidence interval.
+
+<div class="hiddensolution">
+```{r include = TRUE, eval=TRUE, warning=FALSE}
+res <- cbind.data.frame(donMean[,2], donReg[, 2],  donStochReg[,2])
+MM <- apply(res, 2, mean, na.rm = T)
+SD <- apply(res, 2, sd, na.rm = T)
+COR <- apply(res,2, cor, donmiss[,1])
+INF <- MM - qt(.975, n-1) * SD/sqrt(n)
+SUP <- MM + qt(.975, n-1) * SD/sqrt(n)
+WIDTH <- SUP - INF
+INCI <- (125<=SUP)&(125>=INF)
+res <-  rbind.data.frame(MM, SD, COR, INF, SUP, WIDTH, INCI)
+colnames(res) <-   c("MEAN","REG", "STOCH")
+rownames(res) <- c("muhat_y", "sigmahat_y", "cor", "inf", "sup", "width", "coverage")
+```
+</div>
+
+The variance of y is underestimated with the imputation by the mean and by regression. So the confidence interval for the mean of y, $\mu_y$, could not be accurate. The correlation between x and y is completely distroyed by these imputation methods as well. The results obtained by the stochastic regression imputation since the mean of y , the variance of y and the correlation between x and y are well estimated.
+
+
+6. Repeat steps 1, 3 and 4, 10000 times (generating data,  generating missing entries, imputing values, computing some stats) and compute the bias of $\hat \theta$, the coverage of the confidence interval for $\mu_y$ as well as the average of the width of the confidence intervals. Comment. 
+Here I put also two differents solutions.
+
+<div class="hiddensolution">
+```{r include = TRUE, eval=TRUE, warning=FALSE}
+# Way 1
+SimuMiss <- function(){
+# generate data
+don <-rmvnorm(n, mean=c(125,125), sigma=matrix(c(625,375,375,625), ncol =2 ) )
+colnames(don) <- c("X","Y")
+don <- as.data.frame(don)
+
+# generate missing values
+donmiss <- don
+indNA <- sample(1:n, 0.73*n)
+donmiss[indNA, 2] <- NA
+
+donMean <- donReg <- donStochReg <- donmiss 
+
+# Mean Imputation
+donMean[indNA, 2] <- mean(donMean[, 2], na.rm = T)
+
+# Regression Imputation
+reg <- lm(Y~X, data = donmiss)
+donReg[indNA, 2] <- predict(reg, donmiss[indNA, 1,drop = F])
+
+# Stochastic Regression Imputation
+donStochReg[indNA, 2] <- donReg[indNA, 2] + rnorm(length(indNA), 0, (summary(reg))$sigma)
+
+# Estimating the mean, the variance of Y, and a confidence interval for mu_y
+res <- cbind.data.frame(donMean[,2], donReg[, 2],  donStochReg[,2])
+MM <- apply(res, 2, mean, na.rm = T)
+SD <- apply(res, 2, sd, na.rm = T)
+COR <- apply(res,2, cor, donmiss[,1])
+INF <- MM - qt(.975, n-1) * SD/sqrt(n)
+SUP <- MM + qt(.975, n-1) * SD/sqrt(n)
+
+WIDTH <- SUP - INF
+INCI <- (125<=SUP)&(125>=INF)
+
+res <-  rbind.data.frame(MM, SD, COR, INF, SUP, WIDTH, INCI)
+colnames(res) <-   c("MEAN","REG", "STOCH")
+rownames(res) <- c("theta_y", "sigma_y", "cor", "inf", "sup", "width", "coverage")
+return(res)
+}
+
+library(matrixStats)
+resRepeat <- lapply(1:1000, function(i) SimuMiss())
+bias <- colMeans(do.call(rbind, lapply(resRepeat, function(x) x[1,]-125)))
+cov <- colMeans(do.call(rbind, lapply(resRepeat, function(x) x[7,])))
+avg.width <- colMeans(do.call(rbind, lapply(resRepeat, function(x) x[6,])))
+res <- rbind(bias, cov, avg.width)
+res
+```
+</div>
+
+<div class="hiddensolution">
+```{r}
+# Way 2
+statcheck <- function(don){
+ test <- t.test(don[,2]) 
+ muhat <-test$estimate
+ corhat <-cor(don[,1],don[,2])
+ cov <- 0
+ CImu <- if((125<=test$conf.int[2])&(125>=test$conf.int[1])) cov <- 1
+ sigmahat <- sd(don[,2])
+ widthCI <-test$conf.int[2] -test$conf.int[1]
+ return(list(muhat=muhat, sigmahat= sigmahat,  corhat = corhat , cov=cov,  widthCI= widthCI))
+}
+
+MCAR <-function(don, percent)
+{
+  indNA <- sample(1:nrow(don), percent*nrow(don))
+  don[indNA, 2] <- NA
+  return(don)
+}
+
+Impute <-function(don){
+don<-as.data.frame(don)
+colnames(don)=c("X","Y")
+donMean<-donReg<-donStochReg<-don
+indNA <- which(is.na(don[,2]))
+# Mean Imputation
+donMean[indNA, 2] <- mean(don[, 2], na.rm = T)
+
+# Regression Imputation
+reg <- lm(Y~X, data = don)
+donReg[indNA, 2] <- predict(reg, don[indNA, 1,drop = F])
+
+# Stochastic Regression Imputation
+donStochReg[indNA, 2] <- donReg[indNA, 2] + rnorm(length(indNA), 0, (summary(reg))$sigma)
+return(list(donMean=donMean, donReg=donReg, donStochReg=donStochReg))
+}
+
+# Replicate 1000 times the simulation
+n <- 100
+res <-replicate(1000, rmvnorm(n, mean=c(125,125), sigma=matrix(c(625,375,375,625), ncol =2 ) )) # replicate function here outputs an array
+arraymiss <- apply(res, MARGIN=3, FUN=MCAR, percent=0.73) 
+aa <-array(arraymiss, dim = c(n, 2, 10))
+bb <- apply(aa, 3, Impute)
+cc <- lapply(bb, lapply, statcheck)
+dd <- lapply(cc, unlist)
+RES<- Reduce("+", dd) / length(dd)
+RES<-as.data.frame(matrix(RES, 3, 5, byrow=T))
+colnames(RES) <- c("muhat", "sigmahat","corhat", "cov_mu", "width_CI_mu")
+rownames(RES) <- c("MEAN", "REGRESSION", "REGSTO")
+RES
+```
+</div>
+
+
+7. What is your explanation regarding the previous results. What could be done?
+
+<div class="hiddensolution">
+The point is to show that even stochastic regression does not manage to provide an accurate coverage under MCAR since it is a **single imputation method** and does not reflect the variability due to the missing values. 
+Indeed, with stochastic regression imputation, the estimators of the mean, of the variance and of the correlation coefficient are unbiaised but the variance of the estimators (the variance of the estimator of the mean of y) are too low. Indeed, we consider observed values and imputed values in the same way whereas the imputed values are predicted with a model so there is an uncertainty associated to the prediction that needs to be taken into account in the subsequent analysis. A solution is multiple imputation. 
+You have to note that the way to deal with missing values depends on your final aim. If the aim is to do inference, estimating parameters and their variance as well as possible, then single imputation is dangerous (a single value can not reflect the variance of prediction).
+</div>
+
+8. Repeat the previous analysis for the mechanism MAR and MNAR where missing values are inserted in the variable 1 when the values of the second variable are smaller than 140 for the former and where  missing values are inserted in the variable 1 when the values of the variable 1 are smaller than 140.
+
+<div class="hiddensolution">
+```{r}
+SimuMiss <- function(method){
+# generate data
+don <-rmvnorm(n, mean=c(125,125), sigma=matrix(c(625,375,375,625), ncol =2 ) )
+colnames(don) <- c("X","Y")
+don <- as.data.frame(don)
+
+# generate missing values
+donmiss <- don
+if (method == "MCAR"){
+indNA <- sample(1:n, 0.73*n)
+donmiss[indNA, 2] <- NA
+} 
+if (method == "MAR"){
+donmiss[donmiss[,1]<=140, 2] <- NA
+indNA <- which(is.na(donmiss[,2]))
+}
+if (method == "MNAR"){
+donmiss[donmiss[,2]<=140, 2] <- NA
+indNA <- which(is.na(donmiss[, 2]))
+}
+
+donMean <- donReg <- donStochReg <- donmiss 
+
+# Mean Imputation
+donMean[indNA, 2] <- mean(donMean[, 2], na.rm = T)
+
+# Regression Imputation
+reg <- lm(Y~X, data = donmiss)
+donReg[indNA, 2] <- predict(reg, donmiss[indNA, 1,drop = F])
+
+# Stochastic Regression Imputation
+donStochReg[indNA, 2] <- donReg[indNA, 2] + rnorm(length(indNA), 0, (summary(reg))$sigma)
+
+# Estimating the mean, the variance of Y, and a confidence interval for mu_y
+res <- cbind.data.frame(donmiss[, 2], donMean[,2], donReg[, 2],  donStochReg[,2])
+MM <- apply(res, 2, mean, na.rm = T)
+SD <- apply(res, 2, sd, na.rm = T)
+INF <- MM - qt(.975, n-1) * SD/sqrt(n)
+SUP <- MM + qt(.975, n-1) * SD/sqrt(n)
+
+# Complete case Analysis
+INF[1] <- MM[1] - qt(.975, n-(length(indNA))-1) * SD[1]/sqrt(n-(length(indNA))-1)
+SUP[1] <- MM[1] + qt(.975, n-(length(indNA))-1) * SD[1]/sqrt(n-(length(indNA))-1)
+
+INCI <- (125<=SUP)&(125>=INF)
+WIDTH <- SUP - INF
+res = rbind.data.frame(MM, SD, INF, SUP, INCI, WIDTH)
+colnames(res) =  c("CA", "MEAN","REG", "STOCH")
+return(res)
+}
+# SimuMiss("MCAR")
+
+
+MAT <- MAT1 <- MAT2 <- matrix(0, 6, 4)
+#for (i in 1:10000){
+MAT <- MAT + as.matrix(SimuMiss("MCAR"))
+MAT1 <- MAT1 + as.matrix(SimuMiss("MAR"))
+MAT2 <- MAT2 + as.matrix(SimuMiss("MNAR"))
+#}
+#cbind.data.frame(MAT,MAT1,MAT2)/10000
+```
+</div>
+
+
+## 3.2) Imputation with a joint Gaussian distribution
+
+
+Assume first that the complete data $(X)$ has a multivariate normal distribution $\mathcal{N}(\mu,\Sigma)$. The parameters $\mu$ and $\Sigma$ may be estimated using maximum likelihood based procedures for incomplete data models such as the Expectation Maximization algorithm detailed above. Then, the conditional distribution of the missing data $X_{\text{MIS}}$ given the observations $X_{\text{OBS}}$ can be derived using Schur complements. If $\Sigma_{\text{MIS}}\in\mathbb{R}^{m\times m}$ is the covariance of $X_{\text{MIS}}$, $\Sigma_{\text{OBS}}\in\mathbb{R}^{p\times p}$ is the covariance of $X_{\text{OBS}}$ and $C_{\text{MIS},\text{OBS}}\in\mathbb{R}^{m\times p}$ is the covariance matrix between $X_{\text{MIS}}$ and $X_{\text{OBS}}$ then $\Sigma$ is given by:
+$$
+\Sigma = \begin{pmatrix}
+\Sigma_{\text{MIS}}&C_{\text{MIS},\text{OBS}}\\C'_{\text{MIS},\text{OBS}}&\Sigma_{\text{OBS}}
+\end{pmatrix}\,.
+$$
+Conditionally on $X_{\text{OBS}}$, $X_{\text{MIS}}$ has a normal distribution with covariance matrix $\Sigma_{X_{\text{MIS}}|X_{\text{OBS}}}$ given by the Schur complement of $\Sigma_{\text{OBS}}$ in $\Sigma$:
+$$
+\Sigma_{\text{MIS}|\text{OBS}} = \Sigma_{\text{MIS}} - C_{\text{MIS},\text{OBS}}\Sigma^{-1}_{\text{OBS}}C'_{\text{MIS},\text{OBS}}\,.
+$$
+
+Note also that the mean $\mu_{\text{MIS}|\text{OBS}}$ of the distribution of $X_{\text{MIS}}$ given $X_{\text{OBS}}$ is:
+$$
+\mu_{\text{MIS}|\text{OBS}} = \mathbb{E}[X_{\text{MIS}}] + C_{\text{MIS},\text{OBS}}\Sigma_{\text{OBS}}^{-1}\left(X_{\text{OBS}} - \mathbb{E}[X_{\text{OBS}}]\right)\,.
+$$
+
+
+Note that this corresponds to imputation by regression if only one variable has missing values. 
+
+In R, we can estimate the mean and covariance matrix with EM with: 
+
+```{r}
+library(norm)
+pre <- prelim.norm(as.matrix(donmiss))
+thetahat <- em.norm(pre)
+getparam.norm(pre,thetahat)
+```
+
+Then, we can impute the missing data using by drawing from the conditional distribution using:
+```{r}
+# Very important: rngseed MUST be called before using imp.norm
+rngseed(1e5)
+imp.draw <- imp.norm(pre,thetahat,donmiss)
+```
+
+Alternatively, we can impute missing values with their conditional expectation, based on the imputed mean and covariance matrix (code to be optimized later):
+```{r }
+to_matrix = function(x, horiz){
+  # Helper function that converts to matrix 
+  # while ensuring that the orientation is the right one if
+  # the inpute is just a vector (->column or row matrix)
+  if(!is.null(dim(x))){
+    return(x)
+  }
+  else{
+    if(!horiz){
+      return(as.matrix(x))
+    }
+    else{
+      return(t(as.matrix(x)))
+    }
+  }
+}
+
+estimate.1row = function(row, s, m){
+  # Used to perform the imputation on one row
+  miss_col = is.na(row)
+  nmiss = sum(miss_col)
+  if(nmiss>0){
+    mu.miss = m[miss_col]
+    mu.obs = m[!miss_col]
+    sigma.miss = s[miss_col,miss_col]
+    sigma.miss.obs = to_matrix(s[miss_col,!miss_col], horiz=nmiss==1)
+    sigma.obs = s[!miss_col,!miss_col]
+    mu_cond = mu.miss + sigma.miss.obs %*% solve(sigma.obs) %*% (row[!miss_col] - mu.obs)
+    row[miss_col] = mu_cond
+  }
+  return(row)
+}
+
+
+params = getparam.norm(pre,thetahat)
+sigma = params$sigma
+mu = params$mu
+imp.expectation = t(apply(donmiss, 1, function(x){estimate.1row(x,s=sigma, m=mu)}))
+```
+
+
+# 4) Single imputation with PCA/ PCA with missing values
+
+PCA in the complete case boils down to finding a matrix of low rank $Q$ that gives the best approximation of the matrix $X_{n \times p}$ with $n$ individuals and $p$ variables, assumed to be centered by columns,  in the least squares sense  (with $\|\bullet\|$ the Frobenius norm): 
+
+$$
+argmin_\mu \left\|X_{n\times p} - \mu_{n\times p}\right\|_2^2 : rank{\mu} \leq Q
+$$
+
+The PCA solution (Eckart \& Young,  1936) is  the truncated singular value decomposition (SVD) of the matrix $X=U_{n\times Q} \Lambda_{Q\times Q}^\frac{1}{2} V_{p \times Q}^{'}$ at the order $Q$, with $U$ and $V$ the left and right singular vectors and $\Lambda$ the diagonal matrix containing the eigenvalues:
+
+$$
+\hat \mu_{ij}  = \sum_{q = 1}^{Q} \sqrt{\lambda_q} U_{iq} V_{jq}
+$$
+
+
+The matrix $U{\Lambda}^\frac{1}{2}$ is also known variously  as the scores matrix, principal components matrix, or matrix of the coordinates of the individuals on the axes (our matrix $F$ in the PCA lecture), and the matrix $V$ as the loadings matrix, principal axes matrix or  coefficients matrix (our matrix $u$ in the PCA lecture)
+
+## 4.1) Iterative PCA
+
+PCA has been extended for an incomplete data set by replacing the least squares criterion by a weighted least squares (WLS)
+
+$$
+argmin_\mu  \left\|{ W\odot(X- \mu)}\right\|_2^2 : rank{\mu} \leq Q
+$$
+where $W_{ij}=0$ when $X_{ij}$ is missing and 1 otherwise and $\odot$ stands for the elementwise multiplication.
+The aim is to estimate the PCA parameters despite the missing entries which are skipped (parameters are estimated on the observed values, which makes sense).
+In contrast to the complete case, there is no explicit solution to minimize the WLS criterion  and it is necessary to resort to iterative algorithms. 
+Many algorithms have been proposed and re-discovered in the literature under different names and in different fields (see Josse, Husson 2012 for references), including the *iterative PCA* algorithm suggested by Kiers 1997. It performs:
+
+1. initialization $\ell=0$: substitute missing values with initial values such as the mean of the variables with non-missing entries, the imputed matrix is denoted $X^0$. Calculate $M^0$, the matrix of the vector containing the mean of the variables of $X^0$, repeated in each row of $M^0$. Center the data $X^0 <- X^0-M^0$
+2. step $\ell \geq 1$:
++  perform the SVD  of $(X^{\ell}- M^{\ell})$ to estimate quantities $\Lambda^{\ell}$ and $U^{\ell}$, $V^{\ell}$. 
++  compute the fitted matrix ${\hat \mu}_{{ij}}^{\ell}  = \sum_{q=1}^{Q} \sqrt{\lambda_q^{\ell}} U_{iq}^{\ell}  V_{jq}^{\ell}$ and define the new imputed data as $X^{\ell}= W \odot (X -  M^{\ell})+ ({\bf1}- W)\odot {\hat \mu}^{\ell}$,
+where ${\bf 1_{n\times p}}$ is a matrix filled with ones. The observed values are the same and the missing ones are replaced by the  fitted values. 
++  $X^{\ell} = X^{\ell}  + M^{\ell}$, compute $M^{ \ell}$ from the new completed matrix $X^{\ell}$ 
+3. steps (2.a),  (2.b) and (2.c)  are repeated until the change in the imputed matrix falls below a predefined threshold $\sum_{ij}({\hat \mu}_{ij}^{\ell-1} -{\hat \mu}_{ij}^{\ell} )^2\leq \varepsilon$, with $\varepsilon$ equal to $10^{-6}$ for example.
+Note that the procedure requires the *a priori* knowlege of $Q$, the number of dimensions. We can use a cross-validation strategy. 
+
+At the end of the algorithm we have a PCA with missing values (parameters estimated from an incomplete data) and a data set which has been completed by PCA.
+
+### 4.1.1) estimation of the PCA  parameters with missing values:
+
+The *iterative PCA* algorithm is a EM algorithm associated with the Gaussian noise model where the data is generated as a structure of low rank corrupted by noise:
+
+$$
+X_{n \times p}  =  \mu_{n \times p} + \varepsilon_{n \times p}
+$$
+
+$$
+X_{ij}  = \sum_{q = 1}^{Q} \sqrt{\tilde \lambda_q} \tilde U_{iq} \tilde V_{jq}   + \varepsilon_{ij} 
+\mbox {, }  \ \varepsilon_{ij} \sim \mathcal{N}(0, \sigma^2) \nonumber
+$$
+
+This EM interpretation reinforces the use of the *iterative PCA algorithm* and implies that the estimated scores (in $U\Lambda^{1/2}$) and loadings (in $V$) are the maximum likelihood estimates of the parameters. So we have the "best" PCA with missing values. 
+
+### 4.1.2) imputation with PCA: 
+the quality of the predicted values in PCA is often very good since it imputes with scores and loadings meaning that it takes into account the similarities between the rows and the relationship between the variables to impute the data. It can be seen as a knn imputation for the rows and an imputation with regression for the variables.
+In other words, the success of these methods can also be explained by the fact that the assumptions associated with the imputation model are really very weak: assuming a lower rank structure simply means assuming similar groups of observations and relationships between the variables.
+This explains the popularity of such methods in the recommandation systems such as Netflix, where preferences between people can be summarized with a few number of latent variable. Another important point is that many matrices can be very well approximated by a low rank matrix (see [Udell, 2018](https://arxiv.org/abs/1705.07474))
+
+After getting point estimates of the PCA parameters from an incomplete data as well as single prediction for the missing values a natural step is to study variability.  The missing values framework makes this step even more obvious than usual. 
+Indeed, what confidence should be given to the results obtained from an initial incomplete data set?  It is always possible to carry-out an algorithm, to impute a data set and to obtain results. However,  should they be trusted? Multiple imputation method based on PCA would be a solution to answer this question. 
+
+## 4.2) Cross validation strategy to find the number of dimensions
+
+Leave-one-out cross-validation consists of removing each observed value $x_{ij}$ of the data matrix $X$ one at a time. 
+Then, for a fixed number of dimensions $Q$, we predict its value using the PCA obtained from the data set that excludes this cell  (using the iterative PCA algorithm on the incomplete data set).
+The predicted value is denoted $\left(\hat{x}_{ij}^{-ij}\right)^{Q}$. Lastly, the prediction error is
+computed and the operation repeated for all  observed cells  in $X$ and for a number of dimensions varying from 0 to $\min(n-1,p-1)$.  The number
+$Q$ that minimizes the mean square error of prediction (MSEP) is kept:
+$$
+\text{MSEP}(Q)=\frac{1}{np}
+\sum_{i=1}^{n}{\sum_{j=1}^{p}{\left(
+x_{ij}-\left(\hat{x}_{ij}^{-ij}\right)^{Q}\right)^2}} .
+$$
+This method is computationally costly, especially when the number of
+cells is large, since it requires $Q$ times the number of observed
+cells to perform the iterative PCA algorithm.  To reduce the
+computational cost it is possible to use a $k$-fold approach which
+consists in removing more than one value in the data set, for instance
+10\% of the cells and predict them simultaneously.  
+
+# 5) Multiple Imputation
+
+Even when single imputation is done such as it preserves the joint and marginal distributions of the data (such as with stochastic regression), “the imputed dataset ... fails to account for missing data uncertainty” .
+Indeed, imputed values are considered as observed values and the uncertainty of the prediction is not taken into account in the subsequent analyses. This implies that standard errors of the parameters calculated from the imputed dataset are underestimated (p.65, Little \& Rubin) which leads to confidence intervals and tests that are not valid even if the imputation model is correct. Multiple imputation is a solution. 
+
+Multiple imputation (MI) consists of replacing each missing value by $M$ plausible values which leads to $M$ imputed data sets. The missing values are predicted using  an **imputation model**. In order to perform what is called a **proper** MI Rubin87, the uncertainty of the **imputation model** parameters must be reflected from one imputation to the next (each imputed data is obtained using a different estimated parameter of the imputation model).  Then, MI consists of estimating the parameter $\theta$ of a statistical method (called the **analysis model**) on each imputed data set. Note that several **analyses models** can be applied to a same multiply imputed data set, which is usually used as a strong argument in favor of multiple imputation.  Lastly, the $(\widehat\theta_m)_{1\leq m \leq M}$ estimates of the parameters are pooled to provide a unique estimation for $\psi$ and for its associated variability (which is composed of the within and between variance) using Rubin's rules. 
+More precisely $\hat \theta= \frac{1}{M}\sum_{m=1}^{M}\hat{\theta}_m$ and
+
+$$
+\widehat{Var}(\hat\theta)=\frac{1}{M}
+\sum_{m=1}^{M}\widehat{Var}\left(\hat{\theta}_{m}\right)
++\left(1+\frac{1}{M}\right)\frac{1}{M-1}\sum_{m=1}^{M}{\left(\hat{\theta}_{m}-\hat{\theta}\right)^2}.
+$$
+
+This ensures that the variance of the estimator appropriately takes into account the supplement variability due to missing values. 
+
+## 5.1) Multiple imputation assuming a joint Gaussian distribution 
+
+The classical __joint modeling__ multiple imputation method, assumes that the data follow a joint multivariate normal distribution $\mathcal{N}\left(\mu,\Sigma\right)$. The procedure to get $M$ imputed data can be carried-out as follows using an  expectation-maximization bootstrap algorithm as implemented in the  R-package __Amelia__. 
+
+First, $M$  bootstrap sample are drawn from $X$ (rows are sampled with replacement) to get $M$ incomplete data sets $X^1, ..., X^M$. Then, on each imcomplete data $X^m$, the EM algorithm is applied to estimate the parameters, the mean and the covariance matrix $\left(\hat \mu^m,\hat \Sigma^m\right)$.
+With these values, we can come back to the initial data set $X$ and from this dataset, we impute the data by drawn missing values $x_{ij}^m$ from their predictive distribution (the conditional distribution) given the observed values and the estimated parameters $\left(\hat \mu^m,\hat \Sigma^m\right)$. We do this for the $M$ sets of parameters and consequently get $M$ imputed data sets.
+
+This is the extension of stochastic regression by drawing $M$ values instead of one but by also reflecting the variance of the estimation of the parameters.
+
+## 5.1.1) Multiple imputation for the bivariate ex. Difference between proper and improper MI.
+
+Let's implement improper (many draws from the stochastic regression) and proper multiple imputation. 
+Generate $M=20$ imputed data sets from the stochastic regression imputation (just by drawing 20 times instead of 1). On each imputed data set, compute $ \bar y$ and  $\hat \sigma_{\hat \theta}^2= \hat \sigma_{\bar y}^2$ (it is the variance of $\hat \theta$ and not the variance of $Y$). Aggregate the results according to Rubin's rule. Then, compute the confidence interval for $\mu_y$ (you have now to compute it by "hand": $\hat \theta-qt(0.975, df=v)*\sqrt(T)$ with $T$ the total variance. Note that the degrees of freedom are also adjusted and defined as $v=(M-1)\times (1+\frac{M}{(M+1}) \times \frac{\frac{1}{M}\sum_{m=1}^M  \hat Var(\hat\theta_m)}{ \frac{1}{M-1}\sum_{m=1}^{M}{\left(\hat{\theta}_m-\hat{\theta}\right)^2}}$ (Little \& Rubin, 1987, 2002)[p. 212]. Repeat this step 10000 times and compute the bias, the coverage, and the average width  of the confidence intervals.
+
+The previous method was known as "improper" multiple imputation since the variability of the parameters of the stochastic regression is not taken into account. To perform "proper" multiple imputation, we need to reflect this variability from one imputation to the next (variability of prediction is composed of variability of estimation plus noise). One strategy, is the use of Bootstrap. To generate the $M$ imputed data sets, use the parameters of stochastic regressions obtained from $M$ Bootstrap sample of your data (from your incomplete data, resample the rows with replacement, estimate the parameters of stochastic regression and use it to impute your initial incomplete data, repeat this $M$ times). Then, as previously compute a confidence interval for $\mu_y$ from your $M$ imputed data sets.
+
+The point is to highlight that with proper multiple imputation, we manage to get confidence interval with coverage close to the nominal in MCAR and MAR cases. Proper means that we take into account the variability of the estimation of the parameters (sampling variability) in the variability of prediction. The width of the confidence interval is very large with MAR. Here the sample size is 100 and we have 73% of missing entries on Y, so we may expect better results when increasing the sample size. Code is below.
+
+<div class="hiddensolution">
+```{r} 
+IMPMULT <- function(method, M){
+# generate data
+don <-rmvnorm(n, mean=c(125,125), sigma=matrix(c(625,375,375,625), ncol = 2 ) )
+colnames(don) <- c("X","Y")
+don <- as.data.frame(don)
+
+# generate missing values
+donmiss <- don
+if (method == "MCAR"){
+indNA <- sample(1:n, 0.73*n)
+donmiss[indNA, 2] <- NA
+} 
+if (method == "MAR"){
+donmiss[donmiss[,1]<=140, 2] <- NA
+indNA <- which(is.na(donmiss[,2]))
+}
+if (method == "MNAR"){
+donmiss[donmiss[,2]<=140, 2] <- NA
+indNA <- which(is.na(donmiss[,2]))
+}
+
+# Multiple Imputation
+ThetaHat = VarThetaHat = rep(NA, M)
+for (j in 1:M){
+donStochReg <- donmiss
+# Bootstrap to reflect the sampling variability and have a proper multiple imputation method
+indsample <- sample(1:n, replace = T)  
+reg <- lm(Y~X, data = donmiss[indsample,])
+donStochReg[indNA, 2] <-  predict(reg, donmiss[indNA, 1,drop = F]) +rnorm(length(indNA), 0, (summary(reg))$sigma)
+ThetaHat[j] <- mean(donStochReg[, 2])
+VarThetaHat[j] <- var(donStochReg[, 2])/n
+}
+
+# Combine the results according to Rubin rules
+ThetaHatBar  <- mean(ThetaHat)
+T  <- mean(VarThetaHat)  + (1 + 1/M)* var(ThetaHat)
+
+IMddf  <- (M-1)*(1 + mean(VarThetaHat)/((M+1)*var(ThetaHat)))^2
+
+IMINF <- ThetaHatBar - qt(.975, df = IMddf)*sqrt(T)
+IMSUP <- ThetaHatBar + qt(.975, df = IMddf)*sqrt(T)
+
+IMINCI <- (125<=IMSUP)&(125>=IMINF)
+IMWIDTH <- IMSUP - IMINF
+res = rbind.data.frame(ThetaHatBar, IMINF, IMSUP, IMINCI, IMWIDTH)
+colnames(res) =  c("IM")
+return(res)
+}
+# IMPMULT("MCAR", M = 100)
+
+MAT= MAT1 = MAT2 = rep(0,5)
+#for (i in 1:10000){
+MAT = MAT + as.matrix(IMPMULT("MCAR", M = 100))
+MAT1 = MAT1 + as.matrix(IMPMULT("MAR", M = 100))
+MAT2 = MAT2 + as.matrix(IMPMULT("MNAR", M = 100))
+#}
+MAT/10000
+MAT1/10000
+MAT2/10000
+```
+</div>
+
+## 5.2) Multiple imputation by conditional imputation
+
+This approach is implemented in the R package _mice_
+
+## 5.3) Multiple imputation based on PCA
+
+After the iterative PCA algorithm which can be considered as a single imputation method, it is also possible to generate $M$ imputed values for each missing entries, simply by drawing from their predictive distribution $x_{ij}^{m} \sim \mathcal{N}(\hat \mu_{ij}, \hat \sigma^2)$, for $b=1,...,M$. However, this multiple imputation would be improper as we consider the values of $\hat \mu_{ij}$ as fixed whereas there are only an estimation obtained from one incomplete dataset. Consequently, we use the same approach than in the R package Amelia to generate multiple imputation from a Gaussian model: we first bootsrap the data, on the new incomplete data we apply the iterative PCA algorithm to estimate the parameters and then we impute the dataset with the new estimated parameters, we repeat this approach $M$ times.
+It leads to $M$ imputed data set. 
+
+The observed values from one imputed data set to another are the same but
+the imputed values for missing data differ.  Variability across the
+various imputations reflects variability in the prediction of missing
+values.
+
+The impact of different predicted values on the PCA results can be
+visualized using a strategy illustrated in
+the slides, "Visualization". The
+blue color is used for the observed values and each square corresponds
+to an imputed value. The first data table with black squares
+corresponds to the one obtained after performing the (regularized)
+iterative PCA algorithm. Then, the $M$ other imputed data sets are
+obtained with the multiple imputation method MIPCA. The observed
+values are the same from one table to another but the imputed values
+are different and the variability across the imputation represents the
+variance of prediction of the missing entries.  Individuals in the $M$
+imputed data sets generated by the MIPCA algorithm are projected as
+supplementary individuals onto the reference configuration (the one
+obtained with the regularized iterative PCA algorithm). It means that
+we compute the inner-product between the individuals and the axes
+(loadings) of the reference configuration. An individual without any
+missing values is projected onto its corresponding point whereas an
+individual with missing entries is projected around its initial
+position. In this way, we can visualize the position of individuals
+with different missing value predictions. Next, confidence ellipses
+are drawn assuming a Gaussian distribution.
+These ellipses are very valuable to assess the impact of the missing values strategies on the analysis.
+
+# FAQ
+
+### Imputation with the outcome variable?
+This simple exemple speaks by [itself](http://thestatsgeek.com/2015/05/07/including-the-outcome-in-imputation-models-of-covariates/). 
+
+
+# Quizz
+
+* When you suggest methods to deal with missing values to users, the recurrent question is "What is the percentage of missing values that I can have in my data set, is 50\% too much but 20\% OK?" What is your answer to this question?
+
+<div class="hiddensolution">
+The percentage of missing values is not the only thing which is important. If the variables are highly correlated, we can predict the missing values precisely even with a high fraction of missing values. On the contrary, if the data set is very noisy to begin with, even a small fraction of missing values can be troublesome. Multiple imputation can always be performed and enables to measure precisely the variability of the predictions, which evaluates how much we can trust the results obtained from a (very) incomplete dataset.
+</div>
+
+* Explain the aims of multiple imputation in comparison to single imputation.
+
+<div class="hiddensolution">
+Single imputation leads to underestimating the variability of the parameters estimators because it does not account for the variability due to missing values. Multiple imputation aims at providing an estimation of the parameters of interest as well as their variability, taking into account the variability due to missing values.
+</div>
+
+* Your aim is to impute a data set (predict as well as possible the missing values). You have 3 imputation methods available. How could you compare them? **
+
+<div class="hiddensolution">
+You can use a cross-validation strategy: you remove some available entries, you predict them with the 3 imputation methods and you compute the errors of prediction. You repeat this procedure say K-times. You select the methods which minimizes the prediction error.
+</div>
+
+* What is the difference between imputing by random Forest and imputing by PCA?
+
+<div class="hiddensolution">
+The quality of the imputation depends on the properties of the imputation model. If PCA imputation is used, linear relationships between variables are expected to be better accounted for, whereas random Forests imputation will be better accounted for if there are strong interactions between variables and non-linear relationships. Note that the Forests on the other hand will not be able to interporlate, i.e. to predict out of bounds since they make averages.
+</div>
+
+
+* What are the advantages of multiple imputation based on PCA in comparison to multiple imputation with conditional modeling or joint-modeling (continuous case) ?
+
+<div class="hiddensolution">
+PCA is a dimensionality reduction method and thus you estimate less parameters than the others and could expect to be more stable; it can be apply on any data set n<<p, variables highly correlated.
+
+Note: All the methods impute according to a model implicit or explicit (with the PCA model: data = structure + Noise) 
+</div>
+
+
+* Survey data set with categorical variables and some missing entries. One aim is to apply a logistic regression to predict a variable. Suggest some strategies to proceed (advantages / drawbacks).
+
+<div class="hiddensolution">
+Multiple imputation based on loglinear model: problem when many variables and many categories.
+
+Mutile imputation based on iterated multinomial logistic regression: problem when n<<p, many categories.
+
+Multiple imputation based on normal data: do not respect the categorical nature of the data!!! (Not recommended)
+
+Multiple imputation based on Multiple Correspondence Analysis: requires the number of dimension as a tuning parameters but can be applied for many data sets .
+
+logistic regression with SAEM, works for now only with continuous covariates with the assumption of Gaussian distribution for the covariate.
+</div>
+
+* Dataset with both continuous and categorical variables and missing values. Could you suggest a way to get multiple imputed data sets?
+
+<div class="hiddensolution">
+MICE with regression for continuous and multinomial regression for categorical ones.
+
+MICE with random Forest.
+
+Multiple imputation based on Factorial Analysis for mixed data.
+</div>
